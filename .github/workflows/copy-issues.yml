@@ -1,0 +1,23 @@
+name: "Copy issues"
+on:
+  workflow_dispatch:
+
+jobs:
+  copyissues:
+    runs-on: ubuntu-latest
+    if: github.event.issue.pull_request && startsWith(github.event.comment.body, '/release')
+    steps:
+    - name: Getting Labels data
+      id: label_data
+      uses: octokit/request-action@v2.1.0
+      with:
+        route: GET /repos/${{ GITHUB_REPOSITORY }}/labels
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - run: echo ${{ fromJson(steps.label_data.outputs.data) }}
+    - name: Create Labels
+      run: |
+        for issue in ${{ fromJson(steps.label_data.outputs.data) }}
+        do
+          echo $issue
+        done
