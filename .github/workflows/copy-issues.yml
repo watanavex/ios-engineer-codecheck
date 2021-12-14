@@ -1,23 +1,66 @@
 name: "Copy issues"
 on:
   workflow_dispatch:
+  push:
 
 jobs:
-  copyissues:
+  get-issue-labels:
     runs-on: ubuntu-latest
-    if: github.event.issue.pull_request && startsWith(github.event.comment.body, '/release')
+    outputs:
+      labels: ${{ steps.output_label_data.outputs.value }}
     steps:
     - name: Getting Labels data
-      id: label_data
+      id: get_label_data
       uses: octokit/request-action@v2.1.0
       with:
-        route: GET /repos/${{ GITHUB_REPOSITORY }}/labels
+        route: GET /repos/yumemi-inc/ios-engineer-codecheck/labels
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    - run: echo ${{ fromJson(steps.label_data.outputs.data) }}
-    - name: Create Labels
+    - id: output_label_data
       run: |
-        for issue in ${{ fromJson(steps.label_data.outputs.data) }}
-        do
-          echo $issue
-        done
+        result=$(echo '${{ steps.get_label_data.outputs.data }}' | sed -z 's/\n//g')
+        echo "::set-output name=value::${result}"
+
+  create-issue-labels:
+    needs: get-issue-labels
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: 
+        label: ${{ fromJson(needs.get-issue-labels.outputs.labels) }}
+    steps:
+    - name: Create a label
+      uses: octokit/request-action@v2.1.0
+      with:
+        route: POST /repos/${{ github.repository }}/labels
+        name: ${{ matrix.label.name }}
+        color: ${{ matrix.label.color }}
+        description: ${{ matrix.label.description }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  get-issues:
+    needs: create-issue-labels
+    runs-on: ubuntu-latest
+    outputs:
+      issues: ${{ steps.output_issues_data.outputs.value }}
+    steps:
+    - name: Getting issues data
+      id: get_issues_data
+      uses: octokit/request-action@v2.1.0
+      with:
+        route: GET /repos/yumemi-inc/ios-engineer-codecheck/issues
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - id: output_issues_data
+      run: |
+        result=$(echo '${{ steps.get_issues_data.outputs.data }}' | sed -z 's/\n//g')
+        echo "::set-output name=value::${result}"
+
+  create-issues:
+    needs: get-issues
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: 
+        issue: ${{ fromJson(needs.get-issues.outputs.issues) }}
+    steps:
+    - run: echo ${{ matrix.issue.title }}
